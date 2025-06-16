@@ -170,7 +170,7 @@ install_cuda() {
         sudo dpkg -i cuda-keyring_1.1-1_all.deb 2>&1 | tee -a "$LOG_FILE"
         rm cuda-keyring_1.1-1_all.deb
         sudo apt-get update 2>&1 | tee -a "$LOG_FILE"
-        sudo apt-get install -y cuda-toolkit 2>&1 | tee -a "$LOG_FILE"
+        sudo apt-get install -y -o Dpkg::Options::="--force-confold" nvidia-docker2
         success "CUDA Toolkit installed successfully."
     fi
 }
