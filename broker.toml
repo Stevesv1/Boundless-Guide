@@ -1,0 +1,105 @@
+[market]
+
+mcycle_price = "0.000000000000000001"
+mcycle_price_stake_token = "0.000000000000000001"
+allow_skip_mcycle_limit_addresses = ["0x2546c553d857d20658ece248f7c7d0861a240681", "0xc2db89b2bd434ceac6c74fbc0b2ad3a280e66db0"]
+peak_prove_khz = 489
+max_mcycle_limit = 800
+
+# 20 KB
+max_journal_bytes = 20000
+min_deadline = 600
+lookback_blocks = 499 # 300 blocks ~ 1 hour @ 12s block times
+max_stake = "10"
+# 50 MB
+max_file_size = 50_000_000
+max_fetch_retries = 2
+max_concurrent_proofs = 2
+max_concurrent_preflights = 2
+max_critical_task_retries = 20
+# Optional allow list for customer address.
+#
+# If enabled, all requests from clients not in the allow list are skipped.
+#allow_client_addresses = []
+lockin_priority_gas = 20
+balance_warn_threshold = "0.1"
+balance_error_threshold = "0.05"
+stake_balance_warn_threshold = "10"
+stake_balance_error_threshold = "5"
+# Optional cache directory for storing downloaded images and inputs
+#
+# If not set, files will be re-downloaded every time
+#cache_dir = "./cache"
+lockin_gas_estimate = 200000
+fulfill_gas_estimate = 750000
+groth16_verify_gas_estimate = 250000
+
+[prover]
+# Optional config, if using bonsai set the zkVM version here
+bonsai_r0_zkvm_ver = "2.1.0"
+# Number of retries to poll for proving status.
+#
+# Provides a little durability for transient failures.
+status_poll_retry_count = 3
+# Polling interval to monitor proving status (in millisecs)
+status_poll_ms = 1000
+# Number of retries to query a prover backend for on failures.
+#
+# Used for API requests to a prover backend, creating sessions, preflighting, uploading images, etc.
+# Provides a little durability for transient failures.
+req_retry_count = 3
+# Number of milliseconds to sleep between retries.
+req_retry_sleep_ms = 500
+# Number of retries to for running the entire proof generation process
+#
+# This is separate from the request retry count, as the proving process
+# is a multi-step process involving multiple API calls to create a proof
+# job and then polling for the proof job to complete.
+proof_retry_count = 1
+# Number of milliseconds to sleep between proof retries.
+proof_retry_sleep_ms = 500
+# Set builder guest program (ELF) path
+#
+# When using a durable deploy, set this to the published current SOT guest
+# program path on the system
+#set_builder_guest_path = "./target/riscv-guest/guest-set-builder/set-builder/riscv32im-risc0-zkvm-elf/release/set-builder.bin"
+# Assessor ELF path
+#assessor_set_guest_path = "./target/riscv-guest/guest-assessor/assessor-guest/riscv32im-risc0-zkvm-elf/release/assessor-guest.bin"
+# Interval for checking expired committed orders (in seconds)
+#
+# This is the interval at which the ReaperTask will check for expired orders and mark them as failed.
+# If not set, it defaults to 60 seconds.
+#reaper_interval_secs = 60
+# Grace period before marking expired orders as failed (in seconds)
+#
+# This provides a buffer time after an order expires before the reaper marks it as failed.
+# This helps prevent race conditions with the aggregator that might be processing the order.
+# If not set, it defaults to 10800 seconds (3 hours).
+# reaper_grace_period_secs = 10800
+
+[batcher]
+# Max batch duration before publishing (in seconds)
+batch_max_time = 1000
+# Batch size (in proofs) before publishing
+min_batch_size = 1
+# Batch blocktime buffer
+#
+# Number of seconds before the lowest block deadline in the order batch
+# to flush the batch. This should be approximately snark_proving_time * 2
+block_deadline_buffer_secs = 180
+# Timeout, in seconds for transaction confirmations
+txn_timeout = 60
+# Use the single TXN submission that batches submit_merkle / fulfill_batch into
+#
+# A single transaction. Requires the `submitRootAndFulfill` method
+# be present on the deployed contract
+single_txn_fulfill = true
+# Whether to withdraw from the prover balance when fulfilling
+withdraw = false
+# Polling time, in milliseconds
+batch_poll_time_ms = 500
+# Max combined journal size (in bytes) that once exceeded will trigger a publish
+batch_max_journal_bytes = 40000
+# max batch fees (in ETH) before publishing
+batch_max_fees = "0.01"
+max_submission_attempts = 2
