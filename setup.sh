@@ -65,20 +65,35 @@ install_packages() {
 }
 
 install_gpu_drivers() {
-    info "Detecting and installing appropriate GPU drivers..."
+    info "Checking for existing NVIDIA GPU driver..."
 
+    # Check if NVIDIA driver module is already loaded
+    if lsmod | grep -q "^nvidia"; then
+        success "NVIDIA driver is already loaded in the kernel. Skipping installation."
+        return 0
+    fi
+
+    # Optional: check via nvidia-smi (if available)
+    if command -v nvidia-smi &> /dev/null; then
+        if nvidia-smi &> /dev/null; then
+            success "NVIDIA driver is already installed and functional. Skipping installation."
+            return 0
+        fi
+    fi
+
+    info "Detecting recommended GPU driver..."
     local driver
     driver=$(ubuntu-drivers devices 2>/dev/null | awk '/recommended/ {print $3}')
 
     if [ -z "$driver" ]; then
-        error "No recommended drivers found."
+        error "No recommended GPU driver found."
         return 1
     fi
 
     if is_package_installed "$driver"; then
-        info "GPU driver ($driver) is already installed. Skipping GPU driver installation."
+        info "GPU driver package ($driver) is already installed. Skipping installation."
     else
-        info "Installing GPU driver ($driver)..."
+        info "Installing GPU driver package: $driver"
         if sudo apt-get install -y "$driver" 2>&1 | tee -a "$LOG_FILE"; then
             success "GPU driver ($driver) installed successfully."
         else
