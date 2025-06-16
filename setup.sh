@@ -199,6 +199,11 @@ add_user_to_docker_group() {
     local username
     username=$(logname 2>/dev/null || echo "$SUDO_USER")
 
+    if ! getent group docker >/dev/null; then
+        info "Creating 'docker' group..."
+        sudo groupadd docker
+    fi
+
     if id -nG "$username" | grep -qw "docker"; then
         info "User '$username' is already in the 'docker' group."
     else
