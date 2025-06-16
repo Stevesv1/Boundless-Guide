@@ -183,45 +183,6 @@ modify_compose_for_multiple_gpus() {
     print_info "Configured for $gpu_count GPUs: gpu_prove_agent0 through gpu_prove_agent$((gpu_count-1))"
 }
 
-source_rust_env() {
-    print_info "Sourcing Rust environment..."
-    
-    if [[ -f "$HOME/.cargo/env" ]]; then
-        source "$HOME/.cargo/env"
-        print_info "Sourced Rust environment from $HOME/.cargo/env"
-    fi
-    
-    if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
-        local user_home="/home/$SUDO_USER"
-        if [[ -f "$user_home/.cargo/env" ]]; then
-            source "$user_home/.cargo/env"
-            print_info "Sourced Rust environment from $user_home/.cargo/env"
-        fi
-    fi
-    
-    if [[ -d "$HOME/.cargo/bin" ]]; then
-        export PATH="$HOME/.cargo/bin:$PATH"
-        print_info "Added $HOME/.cargo/bin to PATH"
-    fi
-    
-    if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
-        local user_home="/home/$SUDO_USER"
-        if [[ -d "$user_home/.cargo/bin" ]]; then
-            export PATH="$user_home/.cargo/bin:$PATH"
-            print_info "Added $user_home/.cargo/bin to PATH"
-        fi
-    fi
-    
-    if command -v rustc &> /dev/null && command -v cargo &> /dev/null; then
-        print_success "Rust environment successfully loaded"
-        print_info "Rust version: $(rustc --version)"
-        print_info "Cargo version: $(cargo --version)"
-    else
-        print_error "Failed to load Rust environment"
-        return 1
-    fi
-}
-
 print_step "Updating system and installing dependencies..."
 sudo apt update && sudo apt install -y sudo git curl
 print_success "Dependencies installed"
@@ -231,16 +192,6 @@ git clone https://github.com/boundless-xyz/boundless
 cd boundless
 git checkout release-0.10
 print_success "Repository cloned and checked out to release-0.10"
-
-print_step "Replacing setup script..."
-rm scripts/setup.sh
-curl -o scripts/setup.sh https://raw.githubusercontent.com/zunxbt/boundless-prover/refs/heads/main/script.sh
-chmod +x scripts/setup.sh
-print_success "Setup script replaced"
-
-print_step "Running setup script..."
-sudo ./scripts/setup.sh
-print_success "Setup script executed"
 
 print_step "Checking GPU configuration..."
 gpu_count=0
