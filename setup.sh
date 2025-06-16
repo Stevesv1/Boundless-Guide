@@ -57,6 +57,11 @@ install_packages() {
         ca-certificates
         lsb-release
         jq
+        git
+        sudo
+        apt-transport-https
+        gnupg-agent
+        software-properties-common
     )
 
     info "Installing essential packages: ${packages[*]}..."
@@ -67,13 +72,11 @@ install_packages() {
 install_gpu_drivers() {
     info "Checking for existing NVIDIA GPU driver..."
 
-    # Check if NVIDIA driver module is already loaded
     if lsmod | grep -q "^nvidia"; then
         success "NVIDIA driver is already loaded in the kernel. Skipping installation."
         return 0
     fi
 
-    # Optional: check via nvidia-smi (if available)
     if command -v nvidia-smi &> /dev/null; then
         if nvidia-smi &> /dev/null; then
             success "NVIDIA driver is already installed and functional. Skipping installation."
@@ -177,8 +180,6 @@ install_docker() {
         info "Docker is already installed. Skipping Docker installation."
     else
         info "Installing Docker..."
-        sudo apt install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common 2>&1 | tee -a "$LOG_FILE"
-
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg 2>&1 | tee -a "$LOG_FILE"
 
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
@@ -210,7 +211,6 @@ add_user_to_docker_group() {
         info "Adding user '$username' to the 'docker' group..."
         sudo usermod -aG docker "$username" 2>&1 | tee -a "$LOG_FILE"
         success "User '$username' added to the 'docker' group."
-        info "To apply the new group membership, please log out and log back in."
     fi
 }
 
@@ -232,12 +232,10 @@ install_nvidia_container_toolkit() {
 
     sudo apt update -y 2>&1 | tee -a "$LOG_FILE"
 
-    # Set non-interactive mode and install nvidia-docker2 without prompts
     export DEBIAN_FRONTEND=noninteractive
     echo 'nvidia-docker2 nvidia-docker2/daemon.json boolean false' | sudo debconf-set-selections
     sudo -E apt install -y nvidia-docker2 2>&1 | tee -a "$LOG_FILE"
 
-    # Configure Docker daemon after installation
     configure_docker_nvidia_runtime
 
     sudo systemctl restart docker 2>&1 | tee -a "$LOG_FILE"
@@ -255,7 +253,6 @@ configure_docker_nvidia_runtime() {
         sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$(date +%s)
     fi
     
-    # Create the proper daemon.json configuration
     sudo tee /etc/docker/daemon.json > /dev/null << 'EOF'
 {
     "default-runtime": "nvidia",
@@ -278,39 +275,9 @@ cleanup() {
     success "Cleanup completed."
 }
 
-init_git_submodules() {
-    info "ensuring submodules are initialized..."
-    git submodule update --init --recursive 2>&1 | tee -a "$LOG_FILE"
-    success "git submodules initialized successfully"
-}
-
-verify_rust_installation() {
-    info "Verifying Rust installation..."
-    if command -v rustc &> /dev/null && command -v cargo &> /dev/null; then
-        local rust_version=$(rustc --version)
-        local cargo_version=$(cargo --version)
-        success "Rust verification successful: $rust_version"
-        success "Cargo verification successful: $cargo_version"
-    else
-        error "Rust verification failed. Commands not available in current session."
-        exit 1
-    fi
-}
-
-verify_docker_nvidia() {
-    info "Verifying Docker with NVIDIA support..."
-    if sudo docker run --rm --gpus all nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi &> /dev/null; then
-        success "Docker with NVIDIA support verified successfully."
-    else
-        info "NVIDIA Docker test skipped (GPU may not be available or drivers not loaded yet)."
-    fi
-}
-
-info "===== Script Execution Started at $(date) ====="
+info "===== Installation Script Execution Started at $(date) ====="
 
 check_os
-
-init_git_submodules
 
 update_system
 
@@ -326,18 +293,16 @@ install_nvidia_container_toolkit
 
 install_rust
 
-verify_rust_installation
-
 install_just
 
 install_cuda
 
 cleanup
 
-verify_docker_nvidia
+success "Installation completed successfully!"
 
-success "All tasks completed successfully!"
+info "===== Installation Script Execution Ended at $(date) ====="
 
-info "===== Script Execution Ended at $(date) ====="
-
-exit 0
+info "System will restart in 5 seconds to apply all changes..."
+sleep 5
+sudo reboot
