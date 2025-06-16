@@ -66,8 +66,20 @@ install_packages() {
 
 install_gpu_drivers() {
     info "Detecting and installing appropriate GPU drivers..."
-    sudo ubuntu-drivers install | tee -a "$LOG_FILE"
-    success "GPU drivers installed successfully."
+
+    if ! ubuntu-drivers devices | grep "recommended" >/dev/null; then
+        error "No recommended drivers found."
+        return 1
+    fi
+
+    DRIVER=$(ubuntu-drivers devices | awk '/recommended/ {print $3}')
+    
+    if sudo apt install -y "$DRIVER" | tee -a "$LOG_FILE"; then
+        success "GPU driver ($DRIVER) installed successfully."
+    else
+        error "Failed to install GPU driver ($DRIVER)."
+        return 1
+    fi
 }
 
 install_rust() {
