@@ -194,36 +194,12 @@ add_user_to_docker_group() {
     fi
 }
 
-configure_docker_nvidia_first() {
-    info "Pre-configuring Docker daemon for NVIDIA runtime..."
-    
-    sudo mkdir -p /etc/docker
-    
-    if [[ -f /etc/docker/daemon.json ]]; then
-        info "Backing up existing daemon.json..."
-        sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$(date +%s)
-    fi
-    
-    sudo tee /etc/docker/daemon.json <<EOF 2>&1 | tee -a "$LOG_FILE"
-{
-    "default-runtime": "nvidia",
-    "runtimes": {
-        "nvidia": {
-            "path": "nvidia-container-runtime",
-            "runtimeArgs": []
-        }
-    }
-}
-EOF
-
-    success "Docker daemon pre-configured for NVIDIA runtime."
-}
-
 install_nvidia_container_toolkit() {
     info "Checking NVIDIA Container Toolkit installation..."
 
     if is_package_installed "nvidia-docker2"; then
         success "NVIDIA Container Toolkit (nvidia-docker2) is already installed."
+        configure_docker_nvidia_runtime
         return
     fi
 
@@ -236,12 +212,43 @@ install_nvidia_container_toolkit() {
 
     sudo apt update -y 2>&1 | tee -a "$LOG_FILE"
 
+    # Set non-interactive mode and install nvidia-docker2 without prompts
     export DEBIAN_FRONTEND=noninteractive
+    echo 'nvidia-docker2 nvidia-docker2/daemon.json boolean false' | sudo debconf-set-selections
     sudo -E apt install -y nvidia-docker2 2>&1 | tee -a "$LOG_FILE"
+
+    # Configure Docker daemon after installation
+    configure_docker_nvidia_runtime
 
     sudo systemctl restart docker 2>&1 | tee -a "$LOG_FILE"
 
     success "NVIDIA Container Toolkit installed successfully."
+}
+
+configure_docker_nvidia_runtime() {
+    info "Configuring Docker daemon for NVIDIA runtime..."
+    
+    sudo mkdir -p /etc/docker
+    
+    if [[ -f /etc/docker/daemon.json ]]; then
+        info "Backing up existing daemon.json..."
+        sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$(date +%s)
+    fi
+    
+    # Create the proper daemon.json configuration
+    sudo tee /etc/docker/daemon.json > /dev/null << 'EOF'
+{
+    "default-runtime": "nvidia",
+    "runtimes": {
+        "nvidia": {
+            "path": "nvidia-container-runtime",
+            "runtimeArgs": []
+        }
+    }
+}
+EOF
+
+    success "Docker daemon configured for NVIDIA runtime."
 }
 
 cleanup() {
@@ -294,8 +301,6 @@ install_gpu_drivers
 install_docker
 
 add_user_to_docker_group
-
-configure_docker_nvidia_first
 
 install_nvidia_container_toolkit
 
