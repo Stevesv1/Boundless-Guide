@@ -170,7 +170,7 @@ install_cuda() {
         sudo dpkg -i cuda-keyring_1.1-1_all.deb 2>&1 | tee -a "$LOG_FILE"
         rm cuda-keyring_1.1-1_all.deb
         sudo apt-get update 2>&1 | tee -a "$LOG_FILE"
-        sudo apt-get install -y -o Dpkg::Options::="--force-confold" nvidia-docker2
+        sudo apt-get install -y cuda-toolkit 2>&1 | tee -a "$LOG_FILE"
         success "CUDA Toolkit installed successfully."
     fi
 }
@@ -234,11 +234,9 @@ install_nvidia_container_toolkit() {
 
     export DEBIAN_FRONTEND=noninteractive
     echo 'nvidia-docker2 nvidia-docker2/daemon.json boolean false' | sudo debconf-set-selections
-    sudo -E apt install -y nvidia-docker2 2>&1 | tee -a "$LOG_FILE"
-
+    sudo apt-get install -y -o Dpkg::Options::="--force-confold" nvidia-docker2
     configure_docker_nvidia_runtime
-
-    sudo systemctl restart docker 2>&1 | tee -a "$LOG_FILE"
+    sudo systemctl restart docker
 
     success "NVIDIA Container Toolkit installed successfully."
 }
