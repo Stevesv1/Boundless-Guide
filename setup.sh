@@ -1,45 +1,18 @@
 #!/bin/bash
 
-# =============================================================================
-# Script Name: setup.sh
-# Description:
-#   - Updates the system packages.
-#   - Installs essential boundless packages.
-#   - Installs GPU drivers for provers.
-#   - Installs Docker with NVIDIA support.
-#   - Installs Rust programming language.
-#   - Installs CUDA Toolkit.
-#   - Performs system cleanup.
-#   - Verifies Docker with NVIDIA support.
-#
-# =============================================================================
-
-# Exit immediately if a command exits with a non-zero status,
-# treat unset variables as an error, and propagate errors in pipelines.
 set -euo pipefail
-
-# =============================================================================
-# Constants
-# =============================================================================
 
 SCRIPT_NAME="$(basename "$0")"
 LOG_FILE="/var/log/${SCRIPT_NAME%.sh}.log"
 
-# =============================================================================
-# Functions
-# =============================================================================
-
-# Function to display informational messages
 info() {
     printf "\e[34m[INFO]\e[0m %s\n" "$1"
 }
 
-# Function to display success messages
 success() {
     printf "\e[32m[SUCCESS]\e[0m %s\n" "$1"
 }
 
-# Function to display error messages
 error() {
     printf "\e[31m[ERROR]\e[0m %s\n" "$1" >&2
 }
@@ -48,17 +21,14 @@ is_package_installed() {
     dpkg -s "$1" &> /dev/null
 }
 
-# Function to check if the operating system is Ubuntu
 check_os() {
     if [[ -f /etc/os-release ]]; then
-        # Source the os-release file to get OS information
-        # shellcheck source=/dev/null
         . /etc/os-release
         if [[ "${ID,,}" != "ubuntu" ]]; then
             error "Unsupported operating system: $NAME. This script is intended for Ubuntu."
             exit 1
         elif [[ "${VERSION_ID,,}" != "22.04" && "${VERSION_ID,,}" != "20.04" ]]; then
-            error "Unsupported operating system verion: $VERSION. This script is intended for Ubuntu 20.04 or 22.04."
+            error "Unsupported operating system version: $VERSION. This script is intended for Ubuntu 20.04 or 22.04."
             exit 1
         else
             info "Operating System: $PRETTY_NAME"
@@ -69,7 +39,6 @@ check_os() {
     fi
 }
 
-# Function to update and upgrade the system
 update_system() {
     info "Updating and upgrading the system packages..."
     sudo apt update -y | tee -a "$LOG_FILE"
@@ -77,7 +46,6 @@ update_system() {
     success "System packages updated and upgraded successfully."
 }
 
-# Function to install essential packages
 install_packages() {
     local packages=(
         nvtop
@@ -96,23 +64,20 @@ install_packages() {
     success "Essential packages installed successfully."
 }
 
-# Function to install GPU drivers
 install_gpu_drivers() {
     info "Detecting and installing appropriate GPU drivers..."
     sudo ubuntu-drivers install | tee -a "$LOG_FILE"
     success "GPU drivers installed successfully."
 }
 
-# Function to install Rust
 install_rust() {
     if command -v rustc &> /dev/null; then
         info "Rust is already installed. Skipping Rust installation."
     else
         info "Installing Rust programming language..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y | tee -a "$LOG_FILE"
-        # Source Rust environment variables for the current session
+        
         if [[ -f "$HOME/.cargo/env" ]]; then
-            # shellcheck source=/dev/null
             source "$HOME/.cargo/env"
             success "Rust installed successfully."
         else
@@ -120,23 +85,43 @@ install_rust() {
             exit 1
         fi
     fi
+    
+    info "Configuring Rust environment for all users and sessions..."
+    
+    if ! grep -q 'source $HOME/.cargo/env' ~/.bashrc 2>/dev/null; then
+        echo 'source $HOME/.cargo/env' >> ~/.bashrc
+    fi
+    
+    if ! grep -q 'source $HOME/.cargo/env' ~/.profile 2>/dev/null; then
+        echo 'source $HOME/.cargo/env' >> ~/.profile
+    fi
+    
+    if [[ -n "${SUDO_USER:-}" ]] && [[ "$SUDO_USER" != "root" ]]; then
+        local user_home="/home/$SUDO_USER"
+        if ! sudo -u "$SUDO_USER" grep -q 'source $HOME/.cargo/env' "$user_home/.bashrc" 2>/dev/null; then
+            echo 'source $HOME/.cargo/env' | sudo -u "$SUDO_USER" tee -a "$user_home/.bashrc" > /dev/null
+        fi
+        if ! sudo -u "$SUDO_USER" grep -q 'source $HOME/.cargo/env' "$user_home/.profile" 2>/dev/null; then
+            echo 'source $HOME/.cargo/env' | sudo -u "$SUDO_USER" tee -a "$user_home/.profile" > /dev/null
+        fi
+    fi
+    
+    export PATH="$HOME/.cargo/bin:$PATH"
+    success "Rust environment configured for current and future sessions."
 }
 
-# Function to install the `just` command runner
 install_just() {
     if command -v just &>/dev/null; then
         info "'just' is already installed. Skipping."
         return
     fi
 
-    info "Installing the 'just' command-runner…"
-    # Install the latest pre-built binary straight to /usr/local/bin
+    info "Installing the 'just' command-runner..."
     curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
     | sudo bash -s -- --to /usr/local/bin | tee -a "$LOG_FILE"
     success "'just' installed successfully."
 }
 
-# Function to install CUDA Toolkit
 install_cuda() {
     if is_package_installed "cuda-toolkit"; then
         info "CUDA Toolkit is already installed. Skipping CUDA installation."
@@ -154,38 +139,29 @@ install_cuda() {
     fi
 }
 
-# Function to install Docker
 install_docker() {
     if command -v docker &> /dev/null; then
         info "Docker is already installed. Skipping Docker installation."
     else
         info "Installing Docker..."
-        # Install prerequisites
         sudo apt install -y apt-transport-https ca-certificates curl gnupg-agent software-properties-common 2>&1 | tee -a "$LOG_FILE"
 
-        # Add Docker's official GPG key
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg 2>&1 | tee -a "$LOG_FILE"
 
-        # Set up the stable repository
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-        # Update package index
         sudo apt update -y 2>&1 | tee -a "$LOG_FILE"
 
-        # Install Docker Engine, CLI, and Containerd
         sudo apt install -y docker-ce docker-ce-cli containerd.io 2>&1 | tee -a "$LOG_FILE"
 
-        # Enable Docker
         sudo systemctl enable docker 2>&1 | tee -a "$LOG_FILE"
 
-        # Start Docker Service
         sudo systemctl start docker 2>&1 | tee -a "$LOG_FILE"
 
         success "Docker installed and started successfully."
     fi
 }
 
-# Function to add user to Docker group
 add_user_to_docker_group() {
     local username
     username=$(logname 2>/dev/null || echo "$SUDO_USER")
@@ -200,43 +176,16 @@ add_user_to_docker_group() {
     fi
 }
 
-# Function to install NVIDIA Container Toolkit
-install_nvidia_container_toolkit() {
-    info "Checking NVIDIA Container Toolkit installation..."
-
-    if is_package_installed "nvidia-docker2"; then
-        success "NVIDIA Container Toolkit (nvidia-docker2) is already installed."
-        return
-    fi
-
-    info "Installing NVIDIA Container Toolkit..."
-
-    # Add the package repositories
-    local distribution
-    distribution=$(grep '^ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
-    curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add - 2>&1 | tee -a "$LOG_FILE"
-    curl -s -L https://nvidia.github.io/nvidia-docker/"$distribution"/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list 2>&1 | tee -a "$LOG_FILE"
-
-    # Update the package lists
-    sudo apt update -y 2>&1 | tee -a "$LOG_FILE"
-
-    # Install the NVIDIA Docker support
-    sudo apt install -y nvidia-docker2 2>&1 | tee -a "$LOG_FILE"
-
-    # Restart Docker to apply changes
-    sudo systemctl restart docker 2>&1 | tee -a "$LOG_FILE"
-
-    success "NVIDIA Container Toolkit installed successfully."
-}
-
-# Function to configure Docker daemon for NVIDIA
-configure_docker_nvidia() {
-    info "Configuring Docker to use NVIDIA runtime by default..."
-
-    # Create Docker daemon configuration directory if it doesn't exist
+configure_docker_nvidia_first() {
+    info "Pre-configuring Docker daemon for NVIDIA runtime..."
+    
     sudo mkdir -p /etc/docker
-
-    # Create or overwrite daemon.json with NVIDIA runtime configuration
+    
+    if [[ -f /etc/docker/daemon.json ]]; then
+        info "Backing up existing daemon.json..."
+        sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$(date +%s)
+    fi
+    
     sudo tee /etc/docker/daemon.json <<EOF 2>&1 | tee -a "$LOG_FILE"
 {
     "default-runtime": "nvidia",
@@ -249,13 +198,34 @@ configure_docker_nvidia() {
 }
 EOF
 
-    # Restart Docker to apply the new configuration
-    sudo systemctl restart docker 2>&1 | tee -a "$LOG_FILE"
-
-    success "Docker configured to use NVIDIA runtime by default."
+    success "Docker daemon pre-configured for NVIDIA runtime."
 }
 
-# Function to perform system cleanup
+install_nvidia_container_toolkit() {
+    info "Checking NVIDIA Container Toolkit installation..."
+
+    if is_package_installed "nvidia-docker2"; then
+        success "NVIDIA Container Toolkit (nvidia-docker2) is already installed."
+        return
+    fi
+
+    info "Installing NVIDIA Container Toolkit..."
+
+    local distribution
+    distribution=$(grep '^ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')$(grep '^VERSION_ID=' /etc/os-release | cut -d'=' -f2 | tr -d '"')
+    curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add - 2>&1 | tee -a "$LOG_FILE"
+    curl -s -L https://nvidia.github.io/nvidia-docker/"$distribution"/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list 2>&1 | tee -a "$LOG_FILE"
+
+    sudo apt update -y 2>&1 | tee -a "$LOG_FILE"
+
+    export DEBIAN_FRONTEND=noninteractive
+    sudo -E apt install -y nvidia-docker2 2>&1 | tee -a "$LOG_FILE"
+
+    sudo systemctl restart docker 2>&1 | tee -a "$LOG_FILE"
+
+    success "NVIDIA Container Toolkit installed successfully."
+}
+
 cleanup() {
     info "Cleaning up unnecessary packages..."
     sudo apt autoremove -y 2>&1 | tee -a "$LOG_FILE"
@@ -269,73 +239,62 @@ init_git_submodules() {
     success "git submodules initialized successfully"
 }
 
-# =============================================================================
-# Main Script Execution
-# =============================================================================
+verify_rust_installation() {
+    info "Verifying Rust installation..."
+    if command -v rustc &> /dev/null && command -v cargo &> /dev/null; then
+        local rust_version=$(rustc --version)
+        local cargo_version=$(cargo --version)
+        success "Rust verification successful: $rust_version"
+        success "Cargo verification successful: $cargo_version"
+    else
+        error "Rust verification failed. Commands not available in current session."
+        exit 1
+    fi
+}
 
-# Display start message with timestamp
+verify_docker_nvidia() {
+    info "Verifying Docker with NVIDIA support..."
+    if sudo docker run --rm --gpus all nvidia/cuda:11.0.3-base-ubuntu20.04 nvidia-smi &> /dev/null; then
+        success "Docker with NVIDIA support verified successfully."
+    else
+        info "NVIDIA Docker test skipped (GPU may not be available or drivers not loaded yet)."
+    fi
+}
+
 info "===== Script Execution Started at $(date) ====="
 
-# Check if the operating system is Ubuntu
 check_os
 
-# ensure all the require source code is present
 init_git_submodules
 
-# Update and upgrade the system
 update_system
 
-# Install essential packages
 install_packages
 
-# Install GPU drivers
 install_gpu_drivers
 
-# Install Docker
 install_docker
 
-# Add user to Docker group
 add_user_to_docker_group
 
-# Install NVIDIA Container Toolkit
+configure_docker_nvidia_first
+
 install_nvidia_container_toolkit
 
-# Configure Docker to use NVIDIA runtime
-configure_docker_nvidia
-
-# Install Rust
 install_rust
 
-# Install Just
+verify_rust_installation
+
 install_just
 
-# Install CUDA Toolkit
 install_cuda
 
-# Cleanup
 cleanup
+
+verify_docker_nvidia
 
 success "All tasks completed successfully!"
 
-# Optionally, prompt to reboot if necessary
-if [ -t 0 ]; then
-    # We're in an interactive terminal
-    read -rp "Do you want to reboot now to apply all changes? (y/N): " REBOOT
-    case "$REBOOT" in
-        [yY][eE][sS]|[yY])
-            info "Rebooting the system..."
-            reboot
-            ;;
-        *)
-            info "Reboot skipped. Please consider rebooting your system to apply all changes."
-            ;;
-    esac
-else
-    # We're in a non-interactive environment (like EC2 user data)
-    info "Running in non-interactive mode. Skipping reboot prompt."
-fi
-
-# Display end message with timestamp
 info "===== Script Execution Ended at $(date) ====="
 
 exit 0
