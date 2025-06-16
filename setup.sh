@@ -67,26 +67,24 @@ install_packages() {
 install_gpu_drivers() {
     info "Detecting and installing appropriate GPU drivers..."
 
-    # Find the recommended driver
-    DRIVER=$(ubuntu-drivers devices 2>/dev/null | awk '/recommended/ {print $3}')
+    local driver
+    driver=$(ubuntu-drivers devices 2>/dev/null | awk '/recommended/ {print $3}')
 
-    if [ -z "$DRIVER" ]; then
+    if [ -z "$driver" ]; then
         error "No recommended drivers found."
         return 1
     fi
 
-    # Check if the driver is already installed
-    if dpkg -l | grep -q "$DRIVER"; then
-        success "GPU driver ($DRIVER) is already installed. Skipping installation."
-        return 0
-    fi
-
-    # Install the driver
-    if sudo apt install -y "$DRIVER" | tee -a "$LOG_FILE"; then
-        success "GPU driver ($DRIVER) installed successfully."
+    if is_package_installed "$driver"; then
+        info "GPU driver ($driver) is already installed. Skipping GPU driver installation."
     else
-        error "Failed to install GPU driver ($DRIVER)."
-        return 1
+        info "Installing GPU driver ($driver)..."
+        if sudo apt-get install -y "$driver" 2>&1 | tee -a "$LOG_FILE"; then
+            success "GPU driver ($driver) installed successfully."
+        else
+            error "Failed to install GPU driver ($driver)."
+            return 1
+        fi
     fi
 }
 
